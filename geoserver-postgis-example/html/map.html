@@ -18,6 +18,7 @@
   <div id="controls">
     <label><input id="toggleRaster" type="checkbox" checked> Raster: padavineAmazon</label>
     <label><input id="toggleVector" type="checkbox" checked> Vektor: graniceAmazona</label>
+	<label><input id="toggleSQL" type="checkbox" checked> Vektor: graniceOpština</label>
     <label style="margin-left:18px">Opština: <input id="opstina__1" type="text" ></label>
     <button id="apply">Prikaži / Osveži</button>
   </div>
@@ -45,12 +46,19 @@
     const vectorLayer = new ol.layer.Tile({ source: vectorSource, visible: true });
 
     // SQL-view parametrized layer (tiles via WMS with viewparams)
-    const sqlSource = new ol.source.TileWMS({
+    const postgisSource = new ol.source.TileWMS({
       url: `${geoserverUrl}/wms`,
       params: { 'LAYERS': `${workspace}:op_tina`, 'TILED': true },
       serverType: 'geoserver'
     });
-    const sqlLayer = new ol.layer.Tile({ source: sqlSource, visible: true });
+    const postgisLayer = new ol.layer.Tile({ source: postgisSource, visible: true });
+	
+	const sqlSource = new ol.source.TileWMS({
+      url: `${geoserverUrl}/wms`,
+      params: { 'LAYERS': `${workspace}:opstina_filter`, 'TILED': true },
+      serverType: 'geoserver'
+    });
+    const sqlLayer = new ol.layer.Tile({ source: sqlSource, visible: false });
 
     const map = new ol.Map({
       target: 'map',
@@ -58,7 +66,8 @@
         new ol.layer.Tile({ source: new ol.source.OSM() }),
         rasterLayer,
         vectorLayer,
-        sqlLayer
+        postgisLayer,
+		sqlLayer
       ],
       view: new ol.View({
         center: ol.proj.fromLonLat([-60, 0]),
@@ -73,25 +82,27 @@
     document.getElementById('toggleVector').addEventListener('change', (e) => {
       vectorLayer.setVisible(e.target.checked);
     });
+	document.getElementById('toggleSQL').addEventListener('change', (e) => {
+      postgisLayer.setVisible(e.target.checked);
+	});
 
     document.getElementById('apply').addEventListener('click', () => {
-      const nameValue = document.getElementById('opstina__1').value.trim();
-      // Set viewparams for the SQL view. GeoServer SQL view must be defined to accept 'name' param.
-      // Example SQL view (on GeoServer side):
-      //   SELECT * FROM op_stina WHERE "name" ILIKE %name%
-      // and viewparam "name" is passed as e.g. name:Novi Beograd
-      const viewparams = nameValue ? `name:${nameValue}` : null;
-      const params = {};
-      if (viewparams) {
-        params.viewparams = viewparams;
-      } else {
-        // ako je prazno, skloni filter (oslanja se na podrazumevano ponašanje SQL view-a)
-        params.viewparams = undefined;
-      }
-      sqlSource.updateParams(params);
-      // make sure sql layer is visible when applying
-      sqlLayer.setVisible(true);
-    });
+	const opstina__1Value = document.getElementById('opstina__1').value.trim();
+
+	let params = {};
+
+	if (opstina__1Value) {
+    // npr. viewparams=opstina__1:Novi%20Beograd
+    const encoded = encodeURIComponent(opstina__1Value);
+    params.viewparams = `opstina__1:${encoded}`;
+	} else {
+    // nema filtera → skloni viewparams
+    params.viewparams = undefined;
+	}
+
+	sqlSource.updateParams(params);
+	sqlLayer.setVisible(true);
+	});
 
   </script>
 </body>
